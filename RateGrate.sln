@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.23107.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RateGrate", "RateGrate\RateGrate.csproj", "{A76A1899-CBBB-4190-888E-C7BF6B5D0BEA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestApiServer", "TestApiServer\TestApiServer.csproj", "{95CFB222-3EF0-463D-9A99-522FF9BFECEA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestClient", "TestClient\TestClient.csproj", "{8FA09312-9E5C-4AC5-8861-DF9006FB1620}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A76A1899-CBBB-4190-888E-C7BF6B5D0BEA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A76A1899-CBBB-4190-888E-C7BF6B5D0BEA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A76A1899-CBBB-4190-888E-C7BF6B5D0BEA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A76A1899-CBBB-4190-888E-C7BF6B5D0BEA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{95CFB222-3EF0-463D-9A99-522FF9BFECEA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{95CFB222-3EF0-463D-9A99-522FF9BFECEA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{95CFB222-3EF0-463D-9A99-522FF9BFECEA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{95CFB222-3EF0-463D-9A99-522FF9BFECEA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8FA09312-9E5C-4AC5-8861-DF9006FB1620}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8FA09312-9E5C-4AC5-8861-DF9006FB1620}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8FA09312-9E5C-4AC5-8861-DF9006FB1620}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8FA09312-9E5C-4AC5-8861-DF9006FB1620}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
