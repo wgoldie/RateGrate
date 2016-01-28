@@ -1,6 +1,8 @@
 # RateGrate
 A library for intelligent rate limit handling, based on a new design of how clients should interpret and handle API rate limits.
 
+Goals include: methods/tasks/attributes/middleware/etc for limiting api queries, tools like token pooling for using/abusing rate limited apis to their fullest potential, reporting information like rate limit delays and expected execution time in-progress tasks.
+
 Currently in development, there is no implementation code yet. 
 In fact the project structure itself is heavily subject to change at this point.
 
@@ -14,4 +16,5 @@ The VS solution consists of:
   and will include and/or consist of external unit tests for the library's functions, 
   with the goal of 100% test and example coverage (hopefully these will be the same thing).
   
+
 please contrib
