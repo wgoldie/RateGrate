@@ -1,56 +1,126 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace TestClient
+﻿namespace TestClient
 {
+    using System;
+    using System.Diagnostics;
+    using System.Net.Http;
+    using System.Threading.Tasks;
+
     /// <summary>
-    /// @todo: use actual testing framework.
+    /// Provides methods to test the api server.
+    /// @TODO: use actual testing framework.
     /// Potentially can't use MSTest because the tests need to be run as part of project startup.
     /// </summary>
-    class Program
+    internal class Program
     {
-        static void Main(string[] args)
+        /// <summary>
+        /// The root of the uri used to connect to the test api server.
+        /// </summary>
+        private const string BaseUri = "http://localhost:5555";
+
+        /// <summary>
+        /// Runs all tests.
+        /// </summary>
+        private static void Main()
         {
-            var testBase = TestBase();
-            var testLimited = TestLimited();
-            Console.Write("Testing base endpoint...");
-            testBase.Wait();
-            Console.WriteLine(testBase.Result ? "Base passed." : "Base failed.");
-            Console.Write("Testing limited endpoint...");
-            testLimited.Wait();
-            Console.WriteLine(testLimited.Result ? "Limited passed." : "Limited failed.");
+            Test(TestBase, "Base");
+            Test(TestSimple, "Simple");
+            Test(TestBucketed, "Bucketed");
+
             Console.ReadLine();
         }
 
-        private const string BaseUri = "http://localhost:5555";
-
-        private static async Task<bool> TestBase()
+        /// <summary>
+        /// Runs a given test method and reports the results in the console.
+        /// </summary>
+        /// <param name="testMethod">The method to run.</param>
+        /// <param name="testName">The name for this test to be printed when reporting results.</param>
+        private static void Test(Func<Task<bool>> testMethod, string testName)
         {
-            using (var client = new HttpClient())
+            var test = testMethod();
+            test.Wait();
+            Console.Write(test.Result ? $"{testName} passed\n" : $"{testName} failed\n");
+        }
+
+        /// <summary>
+        /// Attempts to query a given route.
+        /// </summary>
+        /// <param name="route">The route to query</param>
+        /// <returns>True iff the query returned a parsable integer string.</returns>
+        private static async Task<bool> TryGetRoute(string route)
+        {
+            using (HttpClient client = new HttpClient())
             {
-                await client.GetAsync(new Uri(BaseUri + "/ratetest/5"));
-                var response = await client.GetAsync(new Uri(BaseUri + "/ratetest"));
-                var content = await response.Content.ReadAsStringAsync();
-                Console.WriteLine("Base returned {0}", content);
-                int i;
-                return int.TryParse(content, out i);
+                int j;
+                return int.TryParse(
+                    (await client.GetAsync(requestUri: new Uri(BaseUri + route))
+                        .Result.Content.ReadAsStringAsync())
+                        .Replace("\"", string.Empty),
+                    out j);
             }
         }
 
-        private static async Task<bool> TestLimited()
+        /// <summary>
+        /// Tests the base api endpoint.
+        /// </summary>
+        /// <returns>Whether or not the test was successful.</returns>
+        private static async Task<bool> TestBase()
         {
-            using (var client = new HttpClient())
+            const string route = "/ratetest";
+            await TryGetRoute(route);
+            return await TryGetRoute(route);
+        }
+
+        /// <summary>
+        /// Tests the simple api endpoint.
+        /// </summary>
+        /// <returns>Whether or not the test was successful.</returns>
+        private static async Task<bool> TestSimple()
+        {
+            const int timeout = 2;
+            var route = $"/ratetest/simple/{timeout}";
+            await TryGetRoute(route);
+            if (await TryGetRoute(route))
             {
-                await client.GetAsync(new Uri(BaseUri + "/ratetest/limited"));
-                var response = await client.GetAsync(new Uri(BaseUri + "/ratetest/limited"));
-                var content = await response.Content.ReadAsStringAsync();
-                Console.WriteLine("Limited returned {0}", content);
-                return content.Equals("You must wait 5 seconds before accessing this url again.");
+                return false;
             }
+
+            await Task.Delay(TimeSpan.FromSeconds(timeout));
+            return await TryGetRoute(route);
+        }
+
+        /// <summary>
+        /// Tests the bucketed api endpoint.
+        /// </summary>
+        /// <returns>Whether or not the test was successful.</returns>
+        private static async Task<bool> TestBucketed()
+        {
+            const int bucketSize = 5;
+            const int expirationTime = 1;
+            var route = $"/ratetest/bucketed/{bucketSize}/{expirationTime}";
+
+            var sw = new Stopwatch();
+            sw.Start();
+            for (var i = 0; i < bucketSize; i++)
+            {
+                if (!await TryGetRoute(route))
+                {
+                    return false;
+                }
+            }
+
+            await TryGetRoute(route);
+            await TryGetRoute(route);
+            await TryGetRoute(route);
+
+            if (sw.Elapsed < TimeSpan.FromSeconds(expirationTime)
+                && await TryGetRoute(route))
+            {
+                return false;
+            }
+
+            await Task.Delay(expirationTime * 1000);
+
+            return await TryGetRoute(route);
         }
     }
 }
