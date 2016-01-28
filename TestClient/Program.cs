@@ -34,36 +34,38 @@
         /// </summary>
         /// <param name="testMethod">The method to run.</param>
         /// <param name="testName">The name for this test to be printed when reporting results.</param>
-        private static void Test(Func<Task<bool>> testMethod, string testName)
+        private static void Test(Func<Task<Tuple<bool, string>>> testMethod, string testName)
         {
             var test = testMethod();
             test.Wait();
-            Console.Write(test.Result ? $"{testName} passed\n" : $"{testName} failed\n");
+            Console.Write(test.Result.Item1 ? 
+                $"{testName} passed with response {test.Result.Item2}\n" : 
+                $"{testName} failed with response {test.Result.Item2}\n");
         }
 
         /// <summary>
         /// Attempts to query a given route.
         /// </summary>
         /// <param name="route">The route to query</param>
-        /// <returns>True iff the query returned a parsable integer string.</returns>
-        private static async Task<bool> TryGetRoute(string route)
+        /// <returns>True iff the query returned a parsable integer string, and the response regardless.</returns>
+        private static async Task<Tuple<bool, string>> TryGetRoute(string route)
         {
             using (HttpClient client = new HttpClient())
             {
                 int j;
-                return int.TryParse(
-                    (await client.GetAsync(requestUri: new Uri(BaseUri + route))
-                        .Result.Content.ReadAsStringAsync())
-                        .Replace("\"", string.Empty),
-                    out j);
+                var response = (await client.GetAsync(requestUri: new Uri(BaseUri + route))
+                    .Result.Content.ReadAsStringAsync())
+                    .Replace("\"", string.Empty);
+                var valid = int.TryParse(response, out j);
+                return Tuple.Create(valid, response);
             }
         }
 
         /// <summary>
         /// Tests the base api endpoint.
         /// </summary>
-        /// <returns>Whether or not the test was successful.</returns>
-        private static async Task<bool> TestBase()
+        /// <returns>Whether or not the test was successful along with the response.</returns>
+        private static async Task<Tuple<bool, string>> TestBase()
         {
             const string route = "/ratetest";
             await TryGetRoute(route);
@@ -73,15 +75,15 @@
         /// <summary>
         /// Tests the simple api endpoint.
         /// </summary>
-        /// <returns>Whether or not the test was successful.</returns>
-        private static async Task<bool> TestSimple()
+        /// <returns>Whether or not the test was successful along with the response.</returns>
+        private static async Task<Tuple<bool, string>> TestSimple()
         {
             const int timeout = 2;
             var route = $"/ratetest/simple/{timeout}";
             await TryGetRoute(route);
-            if (await TryGetRoute(route))
+            if ((await TryGetRoute(route)).Item1)
             {
-                return false;
+                return Tuple.Create(false, "Request was not rate limited as expected.");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(timeout));
@@ -91,34 +93,34 @@
         /// <summary>
         /// Tests the bucketed api endpoint.
         /// </summary>
-        /// <returns>Whether or not the test was successful.</returns>
-        private static async Task<bool> TestBucketed()
+        /// <returns>Whether or not the test was successful along with the response.</returns>
+        private static async Task<Tuple<bool, string>> TestBucketed()
         {
             const int bucketSize = 5;
-            const int expirationTime = 1;
+            const int expirationTime = 5000;
             var route = $"/ratetest/bucketed/{bucketSize}/{expirationTime}";
 
             var sw = new Stopwatch();
             sw.Start();
             for (var i = 0; i < bucketSize; i++)
             {
-                if (!await TryGetRoute(route))
+                var rateLimitedResponse = await TryGetRoute(route);
+                if (!rateLimitedResponse.Item1)
                 {
-                    return false;
+                    return rateLimitedResponse;
                 }
             }
 
             await TryGetRoute(route);
             await TryGetRoute(route);
-            await TryGetRoute(route);
 
-            if (sw.Elapsed < TimeSpan.FromSeconds(expirationTime)
-                && await TryGetRoute(route))
+            if (sw.Elapsed.Milliseconds < expirationTime
+                && (await TryGetRoute(route)).Item1)
             {
-                return false;
+                return Tuple.Create(false, "Request was not rate limited as expected.");
             }
 
-            await Task.Delay(expirationTime * 1000);
+            await Task.Delay(expirationTime);
 
             return await TryGetRoute(route);
         }

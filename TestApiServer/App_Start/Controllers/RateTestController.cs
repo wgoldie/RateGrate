@@ -19,7 +19,7 @@
         /// A collection of "buckets" (keyed on user id strings),
         /// which keep track of rate limit quotas for the bucketed route.
         /// </summary>
-        private static readonly Dictionary<string, MemoryCache> Buckets = new Dictionary<string, MemoryCache>();
+        private static readonly Dictionary<string, int> Buckets = new Dictionary<string, int>();
 
         /// <summary>
         /// Unlimited api endpoint to serve as control variable.
@@ -64,37 +64,36 @@
         /// that replenish a specified time after consumption
         /// </summary>
         /// <param name="bucketSize">The maximum available queries at any moment.</param>
-        /// <param name="expiration">The time before a consumed query to replenishes into the bucket.</param>
+        /// <param name="lifetime">The time before a consumed query to replenishes into the bucket, in millseconds.</param>
         /// <returns>The current tick time if the request was ok, or an error string.</returns>
-        [Route("ratetest/bucketed/{bucketSize}/{expiration}")]
-        public string GetBucketed(int bucketSize, int expiration)
+        [Route("ratetest/bucketed/{bucketSize}/{lifetime}")]
+        public string GetBucketed(int bucketSize, int lifetime)
         {
             const string userId = "placeholderUser";
-            MemoryCache c;
-            if (!Buckets.TryGetValue(userId, out c))
+            var key = $"{userId}-{bucketSize}-{lifetime}";
+            int expirationTime;
+            var currentTime = Environment.TickCount;
+            if (!Buckets.TryGetValue(key, out expirationTime))
             {
-                c = new MemoryCache(userId);
-                Buckets.Add($"{userId}-{bucketSize}-{expiration}", c);
+                expirationTime = currentTime;
+                Buckets[key] = expirationTime;
             }
 
-            var ct = c.GetCount();
+            var queriesUsed = (expirationTime - currentTime) / lifetime;
 
-            if (ct > bucketSize)
+            if (queriesUsed > bucketSize)
             {
                 return string.Format(
                     "You may only make {0} queries every {1} seconds " +
                     "and you have made {2} in the last {1} seconds.", 
                     bucketSize, 
-                    expiration,
-                    ct);
+                    lifetime,
+                    queriesUsed);
             }
 
-            c.Add(
-                Guid.NewGuid().ToString(), 
-                true, 
-                DateTime.Now.AddSeconds(expiration));
+            Buckets[key] += lifetime;
 
-            return Environment.TickCount.ToString();
+            return currentTime.ToString();
         }
     }
 }
