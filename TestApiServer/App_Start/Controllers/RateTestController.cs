@@ -1,4 +1,7 @@
-﻿namespace TestApiServer.Controllers
+﻿using System.Net;
+using System.Net.Http;
+
+namespace TestApiServer.Controllers
 {
     using System;
     using System.Collections.Generic;
@@ -59,12 +62,19 @@
             return Environment.TickCount.ToString();
         }
 
+        [Route("homepage")]
+        public HttpResponseMessage HomePage()
+        {
+            return Request.CreateResponse(HttpStatusCode.NotFound);
+        }
+
+
         /// <summary>
         /// Specify rate limiting using a "bucket" of allocated queries
         /// that replenish a specified time after consumption
         /// </summary>
         /// <param name="bucketSize">The maximum available queries at any moment.</param>
-        /// <param name="lifetime">The time before a consumed query to replenishes into the bucket, in millseconds.</param>
+        /// <param name="lifetime">The time before a consumed query to replenishes into the bucket, in milliseconds.</param>
         /// <returns>The current tick time if the request was ok, or an error string.</returns>
         [Route("ratetest/bucketed/{bucketSize}/{lifetime}")]
         public string GetBucketed(int bucketSize, int lifetime)
