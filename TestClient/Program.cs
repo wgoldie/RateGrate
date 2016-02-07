@@ -1,21 +1,20 @@
-﻿using RateGrate;
-
-namespace TestClient
+﻿namespace TestClient
 {
     using System;
     using System.Diagnostics;
     using System.Net.Http;
     using System.Threading.Tasks;
+    using RateGrate;
 
     /// <summary>
-    /// Provides methods to test the api server.
+    /// Provides methods to test the API server.
     /// @TODO: use actual testing framework.
     /// Potentially can't use MSTest because the tests need to be run as part of project startup.
     /// </summary>
     internal class Program
     {
         /// <summary>
-        /// The root of the uri used to connect to the test api server.
+        /// The root of the uri used to connect to the test API server.
         /// </summary>
         private const string BaseUri = "http://localhost:5555";
 
@@ -32,7 +31,7 @@ namespace TestClient
             // with one test per run b/c users aren't implemented on the test server yet
             // @todo fix this
             Test(TestQuotaGrateWithSimple, "QuotaGrate - Simple");
-            Test(TestQuotaGrateWithBucketed, "QuotaGrate - Simple");
+            Test(TestQuotaGrateWithBucketed, "QuotaGrate - Bucketed");
             Console.ReadLine();
         }
 
@@ -54,7 +53,7 @@ namespace TestClient
         /// Attempts to query a given route.
         /// </summary>
         /// <param name="route">The route to query</param>
-        /// <returns>True iff the query returned a parsable integer string, and the response regardless.</returns>
+        /// <returns>True if/only if the query returned an integer string, and the response regardless.</returns>
         private static async Task<Tuple<bool, string>> TryGetRoute(string route)
         {
             using (HttpClient client = new HttpClient())
@@ -69,7 +68,7 @@ namespace TestClient
         }
 
         /// <summary>
-        /// Tests the base api endpoint.
+        /// Tests the base API endpoint.
         /// </summary>
         /// <returns>Whether or not the test was successful along with the response.</returns>
         private static async Task<Tuple<bool, string>> TestBase()
@@ -80,7 +79,7 @@ namespace TestClient
         }
 
         /// <summary>
-        /// Tests the simple api endpoint.
+        /// Tests the simple API endpoint.
         /// </summary>
         /// <returns>Whether or not the test was successful along with the response.</returns>
         private static async Task<Tuple<bool, string>> TestSimple()
@@ -98,7 +97,7 @@ namespace TestClient
         }
 
         /// <summary>
-        /// Tests the bucketed api endpoint.
+        /// Tests the bucketed API endpoint.
         /// </summary>
         /// <returns>Whether or not the test was successful along with the response.</returns>
         private static async Task<Tuple<bool, string>> TestBucketed()
@@ -135,9 +134,9 @@ namespace TestClient
         }
 
         /// <summary>
-        /// Tests the Quota grate with the basic api endpoint.
+        /// Tests the Quota grate with the basic API endpoint.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Whether or not the test was successful along with the response.</returns>
         private static async Task<Tuple<bool, string>> TestQuotaGrateWithSimple()
         {
             const int timeout = 100;
@@ -148,9 +147,10 @@ namespace TestClient
             for (int i = 0; i < 10; i++)
             {
                 grate.Wait();
-                if (!(await TryGetRoute(route)).Item1)
+                var response = await TryGetRoute(route);
+                if (!response.Item1)
                 {
-                    return Tuple.Create(false, $"Requested too fast @ {i}.");
+                    return Tuple.Create(false, $"@{i}: {response.Item2}");
                 }
 
                 grate.Release();
@@ -160,9 +160,9 @@ namespace TestClient
         }
 
         /// <summary>
-        /// Tests the Quota grate with the bucketed api endpoint.
+        /// Tests the Quota grate with the bucketed API endpoint.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>Whether or not the test was successful along with the response.</returns>
         private static async Task<Tuple<bool, string>> TestQuotaGrateWithBucketed()
         {
             const int bucketSize = 5;
@@ -175,9 +175,10 @@ namespace TestClient
             {
                 grate.Wait();
 
-                if (!(await TryGetRoute(route)).Item1)
+                var response = await TryGetRoute(route);
+                if (!response.Item1)
                 {
-                    return Tuple.Create(false, $"Requested too fast @ {i}.");
+                    return Tuple.Create(false, $"@{i}: {response.Item2}");
                 }
 
                 grate.Release();

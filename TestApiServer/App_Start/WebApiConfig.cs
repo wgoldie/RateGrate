@@ -3,7 +3,7 @@
     using System.Web.Http;
 
     /// <summary>
-    /// Configures the api server used in testing.
+    /// Configures the API server used in testing.
     /// </summary>
     public static class WebApiConfig
     {
@@ -20,7 +20,6 @@
                 name: "DefaultApi",
                 routeTemplate: "api/{controller}/{id}",
                 defaults: new { id = RouteParameter.Optional });
-
         }
     }
 }

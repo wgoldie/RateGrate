@@ -3,7 +3,7 @@
     using System.Web.Http;
 
     /// <summary>
-    /// Provides methods to start the api server used in testing.
+    /// Provides methods to start the API server used in testing.
     /// </summary>
     public class WebApiApplication : System.Web.HttpApplication
     {
