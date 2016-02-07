@@ -9,14 +9,16 @@ using System.Threading.Tasks;
 namespace RateGrate
 {
     /// <summary>
-    /// A RateGrate that will allow a specified number of queries during any rate limit period of specified 
+    /// A Grate that will allow a specified number of queries during any rate limit period of specified 
     /// </summary>
-    public abstract class RateGrate
+    public abstract class Grate
     {
         /// <summary>
         /// Waits for an api query slot to open up according to this grate's rate limit definition
         /// @todo change this dumbass name
         /// </summary>
-        public abstract void GrateWait();
+        public abstract void Wait();
+
+        public abstract void Release();
     }
 }

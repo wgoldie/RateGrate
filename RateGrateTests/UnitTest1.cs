@@ -3,7 +3,7 @@
     using Microsoft.VisualStudio.TestTools.UnitTesting;
 
     /// <summary>
-    /// Internal unit tests for the RateGrate library.
+    /// Internal unit tests for the Grate library.
     /// </summary>
     [TestClass]
     public class UnitTest1

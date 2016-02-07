@@ -1,4 +1,6 @@
-﻿namespace TestClient
+﻿using RateGrate;
+
+namespace TestClient
 {
     using System;
     using System.Diagnostics;
@@ -22,10 +24,15 @@
         /// </summary>
         private static void Main()
         {
-            Test(TestBase, "Base");
-            Test(TestSimple, "Simple");
-            Test(TestBucketed, "Bucketed");
+            // Test(TestBase, "Base");
+            // Test(TestSimple, "Simple");
+            // Test(TestBucketed, "Bucketed");
 
+            // you can only reliably test each endpoint
+            // with one test per run b/c users aren't implemented on the test server yet
+            // @todo fix this
+            Test(TestQuotaGrateWithSimple, "QuotaGrate - Simple");
+            Test(TestQuotaGrateWithBucketed, "QuotaGrate - Simple");
             Console.ReadLine();
         }
 
@@ -78,7 +85,7 @@
         /// <returns>Whether or not the test was successful along with the response.</returns>
         private static async Task<Tuple<bool, string>> TestSimple()
         {
-            const int timeout = 2;
+            const int timeout = 500;
             var route = $"/ratetest/simple/{timeout}";
             await TryGetRoute(route);
             if ((await TryGetRoute(route)).Item1)
@@ -86,7 +93,7 @@
                 return Tuple.Create(false, "Request was not rate limited as expected.");
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(timeout));
+            await Task.Delay(TimeSpan.FromMilliseconds(timeout));
             return await TryGetRoute(route);
         }
 
@@ -113,6 +120,8 @@
 
             await TryGetRoute(route);
             await TryGetRoute(route);
+            await TryGetRoute(route);
+            await TryGetRoute(route);
 
             if (sw.Elapsed.Milliseconds < expirationTime
                 && (await TryGetRoute(route)).Item1)
@@ -123,6 +132,58 @@
             await Task.Delay(expirationTime);
 
             return await TryGetRoute(route);
+        }
+
+        /// <summary>
+        /// Tests the Quota grate with the basic api endpoint.
+        /// </summary>
+        /// <returns></returns>
+        private static async Task<Tuple<bool, string>> TestQuotaGrateWithSimple()
+        {
+            const int timeout = 100;
+            var route = $"/ratetest/simple/{timeout}";
+
+            QuotaGrate grate = new QuotaGrate(1, TimeSpan.FromMilliseconds(timeout));
+
+            for (int i = 0; i < 10; i++)
+            {
+                grate.Wait();
+                if (!(await TryGetRoute(route)).Item1)
+                {
+                    return Tuple.Create(false, $"Requested too fast @ {i}.");
+                }
+
+                grate.Release();
+            }
+
+            return Tuple.Create(true, "[none]");
+        }
+
+        /// <summary>
+        /// Tests the Quota grate with the bucketed api endpoint.
+        /// </summary>
+        /// <returns></returns>
+        private static async Task<Tuple<bool, string>> TestQuotaGrateWithBucketed()
+        {
+            const int bucketSize = 5;
+            const int expirationTime = 5000;
+            var route = $"/ratetest/bucketed/{bucketSize}/{expirationTime}";
+
+            QuotaGrate grate = new QuotaGrate(bucketSize, TimeSpan.FromMilliseconds(expirationTime));
+
+            for (int i = 0; i < 10; i++)
+            {
+                grate.Wait();
+
+                if (!(await TryGetRoute(route)).Item1)
+                {
+                    return Tuple.Create(false, $"Requested too fast @ {i}.");
+                }
+
+                grate.Release();
+            }
+
+            return Tuple.Create(true, "[none]");
         }
     }
 }

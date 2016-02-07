@@ -1,8 +1,7 @@
-﻿using System.Net;
-using System.Net.Http;
-
-namespace TestApiServer.Controllers
+﻿namespace TestApiServer.Controllers
 {
+    using System.Net;
+    using System.Net.Http;
     using System;
     using System.Collections.Generic;
     using System.Runtime.Caching;
@@ -45,14 +44,16 @@ namespace TestApiServer.Controllers
             const string userId = "placeholderUser";
             var key = string.Concat("ratetest/simple/{ms}", '-', userId);
 
-            if (HttpRuntime.Cache[key] != null)
+            var val = HttpRuntime.Cache[key];
+            // @todo deal w/ system clock precision
+            if (val != null && unchecked((int)val - Environment.TickCount) > 0) 
             {
                 return $"You must wait {ms} milliseconds between subsequent requests of this route.";
             }
 
             HttpRuntime.Cache.Add(
                 key,
-                true, 
+                Environment.TickCount + ms, 
                 null, 
                 DateTime.Now.AddSeconds(ms),
                 Cache.NoSlidingExpiration,
@@ -85,24 +86,27 @@ namespace TestApiServer.Controllers
             var currentTime = Environment.TickCount;
             if (!Buckets.TryGetValue(key, out expirationTime))
             {
-                expirationTime = currentTime;
-                Buckets[key] = expirationTime;
+                Buckets[key] = expirationTime + lifetime;
+                return currentTime.ToString();
             }
 
-            var queriesUsed = (expirationTime - currentTime) / lifetime;
+            var diff = unchecked(expirationTime - currentTime);
+
+            if (diff < 0)
+            {
+                Buckets[key] = currentTime + lifetime;
+                return currentTime.ToString();
+            }
+
+            var queriesUsed = diff / lifetime;
 
             if (queriesUsed > bucketSize)
-            {
                 return string.Format(
-                    "You may only make {0} queries every {1} seconds " +
-                    "and you have made {2} in the last {1} seconds.", 
-                    bucketSize, 
-                    lifetime,
-                    queriesUsed);
-            }
-
+                            "You may only make {0} queries every {1} seconds.",
+                            bucketSize,
+                            lifetime);
+            
             Buckets[key] += lifetime;
-
             return currentTime.ToString();
         }
     }
