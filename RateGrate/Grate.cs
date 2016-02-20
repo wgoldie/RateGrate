@@ -10,6 +10,12 @@
     public abstract class Grate<T>
     {
         /// <summary>
+        /// Registers a token for future pooled use.
+        /// </summary>
+        /// <param name="token">The token to register.</param>
+        public abstract void RegisterToken(T token);
+
+        /// <summary>
         /// Waits for API availability for the specified token.
         /// </summary>
         /// <param name="token">A representation of an individual API token to wait for availability on.</param>
