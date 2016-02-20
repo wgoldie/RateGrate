@@ -5,6 +5,7 @@
     using System.Net.Http;
     using System.Threading.Tasks;
     using RateGrate;
+    using TestResult = System.Threading.Tasks.Task<System.Tuple<bool, string>>;
 
     /// <summary>
     /// Provides methods to test the API server.
@@ -23,15 +24,13 @@
         /// </summary>
         private static void Main()
         {
-            // Test(TestBase, "Base");
-            // Test(TestSimple, "Simple");
-            // Test(TestBucketed, "Bucketed");
+            Test(TestBase, "Base");
+            Test(TestSimple, "Simple");
+            Test(TestBucketed, "Bucketed");
 
-            // you can only reliably test each endpoint
-            // with one test per run b/c users aren't implemented on the test server yet
-            // @todo fix this
             Test(TestQuotaGrateWithSimple, "QuotaGrate - Simple");
             Test(TestQuotaGrateWithBucketed, "QuotaGrate - Bucketed");
+            Test(TestWaitAndRun, "Wait and Run");
             Console.ReadLine();
         }
 
@@ -40,7 +39,7 @@
         /// </summary>
         /// <param name="testMethod">The method to run.</param>
         /// <param name="testName">The name for this test to be printed when reporting results.</param>
-        private static void Test(Func<Task<Tuple<bool, string>>> testMethod, string testName)
+        private static void Test(Func<TestResult> testMethod, string testName)
         {
             var test = testMethod();
             test.Wait();
@@ -54,7 +53,7 @@
         /// </summary>
         /// <param name="route">The route to query</param>
         /// <returns>True if/only if the query returned an integer string, and the response regardless.</returns>
-        private static async Task<Tuple<bool, string>> TryGetRoute(string route)
+        private static async TestResult TryGetRoute(string route)
         {
             using (HttpClient client = new HttpClient())
             {
@@ -71,7 +70,7 @@
         /// Tests the base API endpoint.
         /// </summary>
         /// <returns>Whether or not the test was successful along with the response.</returns>
-        private static async Task<Tuple<bool, string>> TestBase()
+        private static async TestResult TestBase()
         {
             const string route = "/ratetest";
             await TryGetRoute(route);
@@ -82,10 +81,10 @@
         /// Tests the simple API endpoint.
         /// </summary>
         /// <returns>Whether or not the test was successful along with the response.</returns>
-        private static async Task<Tuple<bool, string>> TestSimple()
+        private static async TestResult TestSimple()
         {
             const int timeout = 500;
-            var route = $"/ratetest/simple/{timeout}";
+            var route = $"/ratetest/simple/TestSimple/{timeout}";
             await TryGetRoute(route);
             if ((await TryGetRoute(route)).Item1)
             {
@@ -100,11 +99,11 @@
         /// Tests the bucketed API endpoint.
         /// </summary>
         /// <returns>Whether or not the test was successful along with the response.</returns>
-        private static async Task<Tuple<bool, string>> TestBucketed()
+        private static async TestResult TestBucketed()
         {
             const int bucketSize = 5;
             const int expirationTime = 5000;
-            var route = $"/ratetest/bucketed/{bucketSize}/{expirationTime}";
+            var route = $"/ratetest/bucketed/TestBucketed/{bucketSize}/{expirationTime}";
 
             var sw = new Stopwatch();
             sw.Start();
@@ -137,23 +136,24 @@
         /// Tests the Quota grate with the basic API endpoint.
         /// </summary>
         /// <returns>Whether or not the test was successful along with the response.</returns>
-        private static async Task<Tuple<bool, string>> TestQuotaGrateWithSimple()
+        private static async TestResult TestQuotaGrateWithSimple()
         {
             const int timeout = 100;
-            var route = $"/ratetest/simple/{timeout}";
+            var route = $"/ratetest/simple/TestQuotaGrateWithSimple/{timeout}";
+            var token = "demoToken";
 
-            QuotaGrate grate = new QuotaGrate(1, TimeSpan.FromMilliseconds(timeout));
+            var grate = new QuotaGrate<string>(1, TimeSpan.FromMilliseconds(timeout));
 
             for (int i = 0; i < 10; i++)
             {
-                grate.Wait();
+                grate.Wait(token);
                 var response = await TryGetRoute(route);
                 if (!response.Item1)
                 {
                     return Tuple.Create(false, $"@{i}: {response.Item2}");
                 }
 
-                grate.Release();
+                grate.Release(token);
             }
 
             return Tuple.Create(true, "[none]");
@@ -163,17 +163,18 @@
         /// Tests the Quota grate with the bucketed API endpoint.
         /// </summary>
         /// <returns>Whether or not the test was successful along with the response.</returns>
-        private static async Task<Tuple<bool, string>> TestQuotaGrateWithBucketed()
+        private static async TestResult TestQuotaGrateWithBucketed()
         {
             const int bucketSize = 5;
             const int expirationTime = 5000;
-            var route = $"/ratetest/bucketed/{bucketSize}/{expirationTime}";
+            var route = $"/ratetest/bucketed/TestQuotaGrateWithBucketed/{bucketSize}/{expirationTime}";
+            var token = "demoToken";
 
-            QuotaGrate grate = new QuotaGrate(bucketSize, TimeSpan.FromMilliseconds(expirationTime));
+            var grate = new QuotaGrate<string>(bucketSize, TimeSpan.FromMilliseconds(expirationTime));
 
-            for (int i = 0; i < 10; i++)
+            for (var i = 0; i < 10; i++)
             {
-                grate.Wait();
+                grate.Wait(token);
 
                 var response = await TryGetRoute(route);
                 if (!response.Item1)
@@ -181,7 +182,32 @@
                     return Tuple.Create(false, $"@{i}: {response.Item2}");
                 }
 
-                grate.Release();
+                grate.Release(token);
+            }
+
+            return Tuple.Create(true, "[none]");
+        }
+
+        /// <summary>
+        /// Tests the WaitAndRun function with a QuotaGrate and the bucketed API endpoint.
+        /// </summary>
+        /// <returns>Whether or not the test was successful along with the response.</returns>
+        private static async TestResult TestWaitAndRun()
+        {
+            const int bucketSize = 5;
+            const int expirationTime = 5000;
+            var route = $"/ratetest/bucketed/TestWaitAndRun/{bucketSize}/{expirationTime}";
+            var token = "demoToken";
+            var grate = new QuotaGrate<string>(bucketSize, TimeSpan.FromMilliseconds(expirationTime));
+
+            for (var i = 0; i < 10; i++)
+            {
+                var response = await grate.WaitAndRun(token, TryGetRoute(route));
+
+                if (!response.Item1)
+                {
+                    return Tuple.Create(false, $"@{i}: {response.Item2}");
+                }
             }
 
             return Tuple.Create(true, "[none]");

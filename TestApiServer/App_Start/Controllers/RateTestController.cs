@@ -34,14 +34,13 @@
         /// <summary>
         /// Specify constant rate delay in milliseconds.
         /// </summary>
+        /// <param name="userToken">An API token identifying an arbitrary, unique user.</param>
         /// <param name="ms">Constant rate delay in milliseconds.</param>
         /// <returns>The current tick time if the request was ok, or an error string.</returns>
-        [Route("ratetest/simple/{ms}")]
-        public string GetSimple(int ms)
+        [Route("ratetest/simple/{userToken}/{ms}")]
+        public string GetSimple(string userToken, int ms)
         {
-            const string userId = "placeholderUser";
-            var key = string.Concat("ratetest/simple/{ms}", '-', userId);
-
+            var key = $"simple-{userToken}-{ms}";
             var val = HttpRuntime.Cache[key];
 
             // @todo deal w/ system clock precision
@@ -61,19 +60,19 @@
 
             return Environment.TickCount.ToString();
         }
-        
+
         /// <summary>
         /// Specify rate limiting using a "bucket" of allocated queries
         /// that replenish a specified time after consumption
         /// </summary>
+        /// <param name="userToken">An API token identifying an arbitrary, unique user.</param>
         /// <param name="bucketSize">The maximum available queries at any moment.</param>
         /// <param name="lifetime">The time before a consumed query to replenishes into the bucket, in milliseconds.</param>
         /// <returns>The current tick time if the request was ok, or an error string.</returns>
-        [Route("ratetest/bucketed/{bucketSize}/{lifetime}")]
-        public string GetBucketed(int bucketSize, int lifetime)
+        [Route("ratetest/bucketed/{userToken}/{bucketSize}/{lifetime}")]
+        public string GetBucketed(string userToken, int bucketSize, int lifetime)
         {
-            const string userId = "placeholderUser";
-            var key = $"{userId}-{bucketSize}-{lifetime}";
+            var key = $"bucketed-{userToken}-{bucketSize}-{lifetime}";
             ConcurrentQueue<int> expirationQueue;
             var currentTime = Environment.TickCount;
             if (!Buckets.TryGetValue(key, out expirationQueue))
