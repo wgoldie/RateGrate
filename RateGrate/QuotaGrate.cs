@@ -1,4 +1,6 @@
-﻿namespace RateGrate
+﻿using System.Timers;
+
+namespace RateGrate
 {
     using System;
     using System.Collections.Concurrent;
@@ -18,12 +20,8 @@
         /// <summary>
         /// Tracks available API slots.
         /// </summary>
-        private readonly Dictionary<T, Tuple<SemaphoreSlim, ConcurrentQueue<int>>> _semaphores;
+        private readonly Dictionary<T, Tuple<SemaphoreSlim, ConcurrentQueue<int>, Timer>> _quotaMap;
         
-        /// <summary>
-        /// Triggers semaphore management worker.
-        /// </summary>
-        private readonly Timer _expirationTimer;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="QuotaGrate{T}"/> class.
@@ -34,8 +32,7 @@
         {
             Queries = queries;
             Period = (int)Math.Ceiling(period.TotalMilliseconds);
-            _semaphores = new Dictionary<T, Tuple<SemaphoreSlim, ConcurrentQueue<int>>>();
-            _expirationTimer = new Timer(Work, null, Period, Timeout.Infinite);
+            _quotaMap = new Dictionary<T, Tuple<SemaphoreSlim, ConcurrentQueue<int>, Timer>>();
         }
 
         /// <summary>
@@ -54,13 +51,15 @@
         /// <param name="token">A representation of an individual API token to wait for availability on.</param>
         public override void Wait(T token)
         {
-            if (!_semaphores.ContainsKey(token))
+            if (!_quotaMap.ContainsKey(token))
             {
-                _semaphores[token] = new Tuple<SemaphoreSlim, ConcurrentQueue<int>>(
-                    new SemaphoreSlim(Queries, Queries), new ConcurrentQueue<int>());
+                _quotaMap[token] = Tuple.Create(
+                    new SemaphoreSlim(Queries, Queries), 
+                    new ConcurrentQueue<int>(),
+                    new Timer(Work(token), null, Period, Timeout.Infinite));
             }
 
-            _semaphores[token].Item1.Wait();
+            _quotaMap[token].Item1.Wait();
         }
 
         /// <summary>
@@ -70,7 +69,7 @@
         public override void Release(T token)
         {
             var t = Period + Environment.TickCount;
-            _semaphores[token].Item2.Enqueue(t);
+            _quotaMap[token].Item2.Enqueue(t);
         }
 
         /// <summary>
@@ -78,11 +77,11 @@
         /// </summary>
         public void Dispose()
         {
-            foreach (var tp in _semaphores.Values)
+            foreach (var tp in _quotaMap.Values)
             {
                 tp.Item1.Dispose();
+                tp.Item3.Dispose();
             }
-            _expirationTimer.Dispose();
             GC.SuppressFinalize(this);
         }
 
@@ -90,15 +89,15 @@
         /// Works on the current queue of query expirations,
         /// releasing the semaphore when the rate limit period has passed for each query.
         /// </summary>
-        /// <param name="state">Necessary to satisfy Timer interface, not used.</param>
-        private void Work(object state)
-        {
-            var currentTick = Environment.TickCount;
-            foreach (var tp in _semaphores.Values)
+        /// <param name="key">The key.</param>
+        /// <returns></returns>
+        private TimerCallback Work(T key) => state =>
             {
+                var currentTick = Environment.TickCount;
                 int expirationTick;
-                var sem = tp.Item1;
-                var que = tp.Item2;
+                var sem = _quotaMap[key].Item1;
+                var que = _quotaMap[key].Item2;
+                var tim = _quotaMap[key].Item3;
                 while (que.TryPeek(out expirationTick) && unchecked(currentTick - expirationTick) >= 0)
                 {
                     int t;
@@ -110,13 +109,12 @@
 
                 if (que.TryPeek(out expirationTick))
                 {
-                    _expirationTimer.Change(unchecked(expirationTick - currentTick), Timeout.Infinite);
+                    tim.Change(unchecked(expirationTick - currentTick), Timeout.Infinite);
                 }
                 else
                 {
-                    _expirationTimer.Change(Period, Timeout.Infinite);
+                    tim.Change(Period, Timeout.Infinite);
                 }
-            }
-        }
+            };
     }
 }
