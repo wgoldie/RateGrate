@@ -3,8 +3,7 @@ A library for intelligent rate limit handling, based on a new design of how clie
 
 Goals include: methods/tasks/attributes/middleware/etc for limiting api queries (including LINQ support), tools like token pooling for using/abusing rate limited apis to their fullest potential, reporting information like rate limit delays and expected execution time in-progress tasks.
 
-Currently in development, there is no implementation code yet. 
-In fact the project structure itself is heavily subject to change at this point.
+Currently in development.
 
 The VS solution consists of:
 - The RateGrate library itself. 
