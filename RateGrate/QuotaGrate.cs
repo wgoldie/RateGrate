@@ -1,11 +1,10 @@
-﻿using System.Timers;
-
-namespace RateGrate
+﻿namespace RateGrate
 {
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Threading;
+    using System.Timers;
 
     /// <summary>
     /// A Grate that will allow a specified number of queries during any rate limit period of specified.
@@ -17,6 +16,9 @@ namespace RateGrate
     /// used to differentiate between different API quotas</typeparam>
     public class QuotaGrate<T> : Grate<T>, IDisposable
     {
+        /// <summary>
+        /// Relates API tokens to their QuotaListing objects.
+        /// </summary>
         private readonly Dictionary<T, QuotaListing> _quotaMap; 
 
         /// <summary>
@@ -41,6 +43,10 @@ namespace RateGrate
         /// </summary>
         public int Queries { get; }
 
+        /// <summary>
+        /// Registers a new token to this grate.
+        /// </summary>
+        /// <param name="token">The API token object to insert</param>
         public override void RegisterToken(T token)
         {
             if (_quotaMap.ContainsKey(token))
@@ -95,7 +101,7 @@ namespace RateGrate
         /// releasing the semaphore when the rate limit period has passed for each query.
         /// </summary>
         /// <param name="key">The key.</param>
-        /// <returns></returns>
+        /// <returns>No return value.</returns>
         private TimerCallback Work(T key) => state =>
             {
                 var currentTick = Environment.TickCount;
@@ -120,20 +126,45 @@ namespace RateGrate
                 }
             };
 
+        /// <summary>
+        /// Tracks information for a specific API token on this grate.
+        /// </summary>
         private class QuotaListing
         {
-            public SemaphoreSlim Semaphore { get; }
-            public ConcurrentQueue<int> ExpirationQueue { get; }
-            public Timer ExpirationTimer { get; }
-            public bool IsPooled { get; set; }
-
+            /// <summary>
+            /// Initializes a new instance of the <see cref="QuotaListing"/> class.
+            /// </summary>
+            /// <param name="worker">The function that evaluates queued actions for this grate.</param>
+            /// <param name="queries">The number of queries allowed per period.</param>
+            /// <param name="period">The period in milliseconds.</param>
+            /// <param name="isPooled">Whether or not the grate is allowed to run pooled queries using this token.</param>
             public QuotaListing(TimerCallback worker, int queries, int period, bool isPooled)
             {
                 Semaphore = new SemaphoreSlim(queries, queries);
                 ExpirationQueue = new ConcurrentQueue<int>();
-                ExpirationTimer = new Timer(worker, null, period, Timeout.Infinite);
+                ExpirationTimer = new System.Threading.Timer(worker, null, period, Timeout.Infinite);
                 IsPooled = isPooled;
             }
+
+            /// <summary>
+            /// Gets a semaphore that tracks this token's availability.
+            /// </summary>
+            public SemaphoreSlim Semaphore { get; }
+
+            /// <summary>
+            /// Gets a queue that tracks expiration times for previously run tasks.
+            /// </summary>
+            public ConcurrentQueue<int> ExpirationQueue { get; }
+
+            /// <summary>
+            /// Gets a timer object used to trigger the worker function.
+            /// </summary>
+            public System.Threading.Timer ExpirationTimer { get; }
+
+            /// <summary>
+            /// Gets or sets a value indicating whether or not this token can be used in pooled queries.
+            /// </summary>
+            public bool IsPooled { get; set; }
         }
     }
 }

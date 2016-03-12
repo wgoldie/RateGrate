@@ -37,6 +37,7 @@
         public async Task<TR> WaitAndRun<TR>(T token, Task<TR> action)
         {
             Wait(token);
+            action.Start();
             var result = await action;
             Release(token);
             return result;

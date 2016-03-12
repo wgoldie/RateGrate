@@ -1,12 +1,8 @@
 ﻿namespace TestApiServer.Controllers
 {
     using System;
-    using System.Collections.Concurrent;
     using System.Collections.Generic;
-    using System.Web;
-    using System.Web.Caching;
     using System.Web.Http;
-    using CacheItemPriority = System.Web.Caching.CacheItemPriority;
 
     /// <summary>
     /// A series of methods that will return the system tick time with various rate limits.
@@ -16,10 +12,10 @@
     public class RateTestController : ApiController
     {
         /// <summary>
-        /// A collection of "buckets" (keyed on user id strings),
+        /// A collection of lists keyed on rate limit strings,
         /// which keep track of rate limit quotas for the bucketed route.
         /// </summary>
-        private static readonly Dictionary<string, ConcurrentQueue<int>> Buckets = new Dictionary<string, ConcurrentQueue<int>>();
+        private static readonly Dictionary<string, List<int>> QueryLogs = new Dictionary<string, List<int>>();
 
         /// <summary>
         /// Unlimited API endpoint to serve as control variable.
@@ -37,28 +33,15 @@
         /// <param name="userToken">An API token identifying an arbitrary, unique user.</param>
         /// <param name="ms">Constant rate delay in milliseconds.</param>
         /// <returns>The current tick time if the request was ok, or an error string.</returns>
-        [Route("ratetest/simple/{userToken}/{ms}")]
-        public string GetSimple(string userToken, int ms)
+        [Route("ratetest/get/simple/{userToken}/{ms}")]
+        public int GetSimple(string userToken, int ms)
         {
+            var tick = Environment.TickCount;
             var key = $"simple-{userToken}-{ms}";
-            var val = HttpRuntime.Cache[key];
 
-            // @todo deal w/ system clock precision
-            if (val != null && unchecked((int)val - Environment.TickCount) > 0) 
-            {
-                return $"You must wait {ms} milliseconds between subsequent requests of this route.";
-            }
+            InsertQuery(key, tick);
 
-            HttpRuntime.Cache.Add(
-                key,
-                Environment.TickCount + ms, 
-                null, 
-                DateTime.Now.AddSeconds(ms),
-                Cache.NoSlidingExpiration,
-                CacheItemPriority.Low,
-                null);
-
-            return Environment.TickCount.ToString();
+            return tick;
         }
 
         /// <summary>
@@ -69,34 +52,117 @@
         /// <param name="bucketSize">The maximum available queries at any moment.</param>
         /// <param name="lifetime">The time before a consumed query to replenishes into the bucket, in milliseconds.</param>
         /// <returns>The current tick time if the request was ok, or an error string.</returns>
-        [Route("ratetest/bucketed/{userToken}/{bucketSize}/{lifetime}")]
-        public string GetBucketed(string userToken, int bucketSize, int lifetime)
+        [Route("ratetest/get/bucketed/{userToken}/{bucketSize}/{lifetime}")]
+        public int GetBucketed(string userToken, int bucketSize, int lifetime)
         {
-            var key = $"bucketed-{userToken}-{bucketSize}-{lifetime}";
-            ConcurrentQueue<int> expirationQueue;
-            var currentTime = Environment.TickCount;
-            if (!Buckets.TryGetValue(key, out expirationQueue))
+            var tick = Environment.TickCount;
+
+            string key = $"bucketed-{userToken}-{bucketSize}-{lifetime}";
+
+            InsertQuery(key, tick);
+
+            return tick;
+        }
+
+        /// <summary>
+        /// Tests if the given bucketed route's rate limit was violated or not in the current logs.
+        /// </summary>
+        /// <param name="userToken">An API token identifying an arbitrary, unique user.</param>
+        /// <param name="bucketSize">The maximum available queries at any moment.</param>
+        /// <param name="lifetime">The time before a consumed query to replenishes into the bucket, in milliseconds.</param>
+        /// <returns>A truth string if the route's rate limit was not violated, and false if it was not.</returns>
+        [Route("ratetest/eval/bucketed/{userToken}/{bucketSize}/{lifetime}")]
+        public string GetEvalBucketed(string userToken, int bucketSize, int lifetime)
+        {
+            string key = $"bucketed-{userToken}-{bucketSize}-{lifetime}";
+            var sorted = QueryLogs[key].ConvertAll(i => i);
+            sorted.Sort();
+
+            for (var i = 0; i < sorted.Count - bucketSize; i++)
             {
-                expirationQueue = new ConcurrentQueue<int>();
-                Buckets[key] = expirationQueue;
+                if (sorted[i + bucketSize] - sorted[i] < lifetime)
+                {
+                    return false.ToString();
+                }
             }
 
-            int expirationTime;
-            while (expirationQueue.TryPeek(out expirationTime) &&
-                   unchecked(expirationTime - currentTime) < 0)
+            return true.ToString();
+        }
+
+        /// <summary>
+        /// Clears the given rate limit's logs.
+        /// </summary>
+        /// <param name="userToken">An API token identifying an arbitrary, unique user.</param>
+        /// <param name="bucketSize">The maximum available queries at any moment.</param>
+        /// <param name="lifetime">The time before a consumed query to replenishes into the bucket, in milliseconds.</param>
+        [Route("ratetest/clear/bucketed/{userToken}/{bucketSize}/{lifetime}")]
+        public void GetClearBucketed(string userToken, int bucketSize, int lifetime)
+        {
+            string key = $"bucketed-{userToken}-{bucketSize}-{lifetime}";
+
+            if (QueryLogs.ContainsKey(key))
             {
-                int t;
-                expirationQueue.TryDequeue(out t);
+                QueryLogs[key].Clear();
+            }
+        }
+
+        /// <summary>
+        /// Clears the given rate limit's logs.
+        /// </summary>
+        /// <param name="userToken">An API token identifying an arbitrary, unique user.</param>
+        /// <param name="ms">Constant rate delay in milliseconds.</param>
+        [Route("ratetest/clear/simple/{userToken}/{ms}")]
+        public void GetClearSimple(string userToken, int ms)
+        {
+            var key = $"simple-{userToken}-{ms}";
+            if (QueryLogs.ContainsKey(key))
+            {
+                QueryLogs[key].Clear();
+            }
+        }
+
+        /// <summary>
+        /// Tests if the given bucketed route's rate limit was violated or not in the current logs.
+        /// </summary>
+        /// <param name="userToken">An API token identifying an arbitrary, unique user.</param>
+        /// <param name="ms">Constant rate delay in milliseconds.</param>
+        /// <returns>A truth string if the route's rate limit was not violated, and false if it was not.</returns>
+        [Route("ratetest/eval/simple/{userToken}/{ms}")]
+        public string GetEvalSimple(string userToken, int ms)
+        {
+            var key = $"simple-{userToken}-{ms}";
+            if (!QueryLogs.ContainsKey(key))
+            {
+                return true.ToString();
             }
 
-            if (expirationQueue.Count > bucketSize)
-            {
-                return $"You may only make {bucketSize} queries every {lifetime} seconds.";
-            }
-            
-            expirationQueue.Enqueue(currentTime + lifetime);
+            var sorted = QueryLogs[key].ConvertAll(i => i);
+            sorted.Sort();
 
-            return currentTime.ToString();
+            for (var i = 0; i < sorted.Count - 1; i++)
+            {
+                if (sorted[i + 1] - sorted[i] < ms)
+                {
+                    return false.ToString();
+                }
+            }
+
+            return true.ToString();
+        }
+
+        /// <summary>
+        /// Logs a query at the specified system tick time to the given key.
+        /// </summary>
+        /// <param name="key">The key for the log to save the time to.</param>
+        /// <param name="tick">The tick time in milliseconds from the system environment.</param>
+        private static void InsertQuery(string key, int tick)
+        {
+            if (!QueryLogs.ContainsKey(key))
+            {
+                QueryLogs[key] = new List<int>();
+            }
+
+            QueryLogs[key].Add(tick);
         }
     }
 }
